@@ -1,10 +1,14 @@
 from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import sessionmaker, declarative_base, scoped_session
 from werkzeug.security import generate_password_hash, check_password_hash
 
-Base = declarative_base()
+# Base de dados
 engine = create_engine('sqlite:///database.db')
-SessionLocalExemplo = sessionmaker(bind=engine)
+
+db_session = scoped_session(sessionmaker(bind=engine))
+
+Base = declarative_base()
+Base.query = db_session.query_property()
 
 
 class UsuarioExemplo(Base):
