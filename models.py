@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, func, ForeignKey
 from sqlalchemy.orm import sessionmaker, declarative_base, scoped_session
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -18,6 +18,8 @@ class UsuarioExemplo(Base):
     email = Column(String, nullable=False, unique=True)
     senha_hash = Column(String, nullable=False)
     papel = Column(String, default='usuario')
+    criado_em = Column(DateTime, nullable=False, server_default=func.now())
+
 
     def set_senha_hash(self, senha):
         self.senha_hash = generate_password_hash(senha)
@@ -38,6 +40,7 @@ class NotasExemplo(Base):
     __tablename__ = 'notas_exemplo'
     id = Column(Integer, primary_key=True)
     conteudo = Column(String, nullable=False)
-    # user_id = Column(Integer, ForeignKey('usuarios_exemplo.id')) # Poderia ter para associar
+    criado_em = Column(DateTime, nullable=False, server_default=func.now())
+    #user_id = Column(Integer, ForeignKey('usuarios_exemplo.id')) # Poderia ter para associar
 
 Base.metadata.create_all(engine)  # Cria as tabelas

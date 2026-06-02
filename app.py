@@ -1,6 +1,5 @@
 import datetime
 from datetime import timedelta
-
 from flask import Flask, jsonify,request
 from sqlalchemy import select
 from models import UsuarioExemplo, NotasExemplo, db_session
@@ -8,6 +7,9 @@ from models import UsuarioExemplo, NotasExemplo, db_session
 from flask_jwt_extended import create_access_token,  get_jwt_identity,jwt_required, JWTManager
 # gerir os papeis
 from functools import wraps
+#from supabase import create_client, Client
+from dotenv import load_dotenv
+
 
 # 3jUU
 
@@ -46,6 +48,7 @@ def admin_required(fn):
 
 @app.route('/', methods=['GET'])
 def principal():
+    print("def_identificacao")
     dado = {
         "msg": "COD: 3jUU"
     }
@@ -54,7 +57,7 @@ def principal():
 @app.route('/login', methods=['POST'])
 def login():
     try:
-        print("sdf")
+        print("def_login", datetime.datetime.now())
         dados_entrada = request.get_json()
         email = dados_entrada.get('email')
         senha = dados_entrada.get('senha')
@@ -62,9 +65,17 @@ def login():
 
         sql = select(UsuarioExemplo).where(UsuarioExemplo.email == email)
         usuario_existente = db_session.execute(sql).scalar()
+        print(f'Usuario existente: {usuario_existente}')
+        if not usuario_existente:
+            print("qtp")
+            dado = {
+                "msg": "Email não cadastrado"
+            }
+            return jsonify(dado), 401
+
         print(f'Usuario existente: {usuario_existente.serialize()}')
         print(f'Senha: {usuario_existente.check_password_hash(senha)}')
-
+        print("bsa",usuario_existente)
         if usuario_existente and usuario_existente.check_password_hash(senha):
             print(datetime.datetime.now())
             access_token = create_access_token(
@@ -74,7 +85,7 @@ def login():
                     "nome":usuario_existente.nome,
                     "criado_em":str(datetime.datetime.now())
                     },
-                expires_delta=timedelta(minutes=15)
+                expires_delta=timedelta(minutes=30)
             )
             dados= {
                 "access_token": access_token
@@ -90,6 +101,7 @@ def login():
 
 @app.route('/usuarios', methods=['POST'])
 def cadastro():
+    print("def_user_post")
     dados = request.get_json()
     nome = dados.get('nome')
     email = dados.get('email')
@@ -120,6 +132,7 @@ def cadastro():
 
 @app.route('/usuarios', methods=['GET'])
 def listar_usuarios():
+    print("def_user_get")
     try:
         stmt = select(UsuarioExemplo)
         users_result = db_session.execute(stmt).scalars().all() # .scalars().all() para obter uma lista de objetos
@@ -132,10 +145,10 @@ def listar_usuarios():
         }
         return jsonify({"msg": f"Erro ao criar nota"}), 500
 
-@app.route('/notas_exemplo', methods=['POST'])
+@app.route('/notas_exemplo/nova', methods=['POST'])
 @jwt_required()
 def criar_nota_exemplo():
-    print("hgk")
+    print("def_nota_post")
     data = request.get_json()
     print("dados_web_criar_tarefa",data)
     conteudo = data.get('conteudo')
@@ -158,11 +171,11 @@ def criar_nota_exemplo():
 
 @app.route('/get_nota', methods=['GET'])
 def listar_notas_exemplo():
-
+    print("def_get_nota")
     try:
         stmt = select(NotasExemplo)
         notas_result = db_session.execute(stmt).scalars().all() # .scalars().all() para obter uma lista de objetos
-        notas_list = [{"id": nota.id, "conteudo": nota.conteudo} for nota in notas_result]
+        notas_list = [{"id": nota.id, "conteudo": nota.conteudo, "criado_em":nota.criado_em} for nota in notas_result]
         return jsonify(notas_list)
     except Exception as e:
         print(str(e))
