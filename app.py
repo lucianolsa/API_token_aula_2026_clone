@@ -2,9 +2,9 @@ import datetime
 from datetime import timedelta
 from flask import Flask, jsonify,request
 from sqlalchemy import select
-from models import UsuarioExemplo, NotasExemplo, db_session
+from models import Usuario, db_session, Atividade
 # gerar token
-from flask_jwt_extended import create_access_token,  get_jwt_identity,jwt_required, JWTManager
+from flask_jwt_extended import create_access_token,  get_jwt_identity,jwt_required, JWTManager, get_jwt
 # gerir os papeis
 from functools import wraps
 #from supabase import create_client, Client
@@ -29,7 +29,7 @@ def admin_required(fn):
         print(f"User:{current_user}")
 
         try:
-            sql = select(UsuarioExemplo).where(UsuarioExemplo.email == current_user)
+            sql = select(Usuario).where(Usuario.email == current_user)
             usuario_existente =db_session.execute(sql).scalar()
             print(f'Usuario existente: {usuario_existente}')
             if usuario_existente and usuario_existente.papel == "admin":
@@ -63,7 +63,7 @@ def login():
         senha = dados_entrada.get('senha')
         print("email:",email,"senha",senha)
 
-        sql = select(UsuarioExemplo).where(UsuarioExemplo.email == email)
+        sql = select(Usuario).where(Usuario.email == email)
         usuario_existente = db_session.execute(sql).scalar()
         print(f'Usuario existente: {usuario_existente}')
         if not usuario_existente:
@@ -81,6 +81,7 @@ def login():
             access_token = create_access_token(
                 identity=str(usuario_existente.email),
                 additional_claims={
+                    "id":usuario_existente.id,
                     "papel":usuario_existente.papel,
                     "nome":usuario_existente.nome,
                     "criado_em":str(datetime.datetime.now())
@@ -103,6 +104,7 @@ def login():
 def cadastro():
     print("def_user_post")
     dados = request.get_json()
+    print("dados_recebido: ",dados)
     nome = dados.get('nome')
     email = dados.get('email')
     senha = dados.get('senha')
@@ -113,13 +115,13 @@ def cadastro():
 
     try:
         # Verificar se o usuário já existe
-        user_check = select(UsuarioExemplo).where(UsuarioExemplo.email == email)
+        user_check = select(Usuario).where(Usuario.email == email)
         usuario_existente = db_session.execute(user_check).scalar()
 
         if usuario_existente:
             return jsonify({"msg": "Usuário já existe"}), 409
 
-        novo_usuario = UsuarioExemplo(nome=nome, email=email, papel=papel)
+        novo_usuario = Usuario(nome=nome, email=email, papel=papel)
         novo_usuario.set_senha_hash(senha)
         db_session.add(novo_usuario)
         db_session.commit()
@@ -128,15 +130,19 @@ def cadastro():
         return jsonify({"msg": "Usuário criado com sucesso", "user_id": user_id}), 201
     except Exception as e:
         db_session.rollback()
+        print("erro500: ",e)
         return jsonify({"msg": f"Erro ao registrar usuário: {str(e)}"}), 500
 
 @app.route('/usuarios', methods=['GET'])
 def listar_usuarios():
     print("def_user_get")
     try:
-        stmt = select(UsuarioExemplo)
+        stmt = select(Usuario)
         users_result = db_session.execute(stmt).scalars().all() # .scalars().all() para obter uma lista de objetos
-        users_result = [{"id": user.id, "nome": user.nome} for user in users_result]
+        for usuario in users_result:
+            print("asd: ",usuario.serialize())
+        users_result = [
+            user.serialize() for user in users_result]
         return jsonify(users_result)
     except Exception as e:
         print(str(e))
@@ -145,20 +151,21 @@ def listar_usuarios():
         }
         return jsonify({"msg": f"Erro ao criar nota"}), 500
 
-@app.route('/notas_exemplo/nova', methods=['POST'])
+@app.route('/atividades', methods=['POST'])
 @jwt_required()
 def criar_nota_exemplo():
     print("def_nota_post")
     data = request.get_json()
     print("dados_web_criar_tarefa",data)
-    conteudo = data.get('conteudo')
-    print("conteudo:",conteudo)
+    nome = data.get('nome')
+    usuario = data.get('usuario_id')
+    print("nome_ativ:",nome)
 
-    if not conteudo:
+    if not nome:
         return jsonify({"msg": "Conteúdo da nota é obrigatório"}), 400
 
     try:
-        nova_nota = NotasExemplo(conteudo=conteudo)
+        nova_nota = Atividade(nome=nome,pessoa_id=usuario)
         # Se quisesse associar ao usuário: nova_nota.user_id = current_user_id
         db_session.add(nova_nota)
         db_session.commit()
@@ -169,20 +176,93 @@ def criar_nota_exemplo():
         print(str(e))
         return jsonify({"msg": f"Erro ao criar nota"}), 500
 
-@app.route('/get_nota', methods=['GET'])
+@app.route('/atividades', methods=['GET'])
+@jwt_required()
 def listar_notas_exemplo():
     print("def_get_nota")
+    claims = get_jwt()
+    print("claims:", claims)
+    is_admin = claims.get('papel') == 'admin'
+    print( "is_admin:", is_admin)
+    if not is_admin:
+        dados = {
+            "msg": "Acesso negado. Você não tem permissão para ver atividades de outro usuário."
+        }
+        return jsonify(dados), 403
     try:
-        stmt = select(NotasExemplo)
+        stmt = select(Atividade)
         notas_result = db_session.execute(stmt).scalars().all() # .scalars().all() para obter uma lista de objetos
-        notas_list = [{"id": nota.id, "conteudo": nota.conteudo, "criado_em":nota.criado_em} for nota in notas_result]
-        return jsonify(notas_list)
+        notas_list = [{"id": nota.id, "nome": nota.nome, "criado_em":nota.criado_em} for nota in notas_result]
+        return jsonify(notas_list),200
     except Exception as e:
         print(str(e))
         dado = {
             "msg": "Credenciais invalidas"
         }
         return jsonify({"msg": f"Erro ao criar nota"}), 500
+
+
+@app.route('/usuario/<id>/atividades', methods=['GET'])
+@jwt_required()
+def listar_notas_usuario(id):
+    print("def_get_nota_usuario")
+    claims = get_jwt()
+    print("claims:", claims)
+    usuario_logado = claims.get('id')
+    is_admin = claims.get('papel') == 'admin'
+    print("usuario_logado:",usuario_logado,"is_admin:",is_admin)
+    if (str(usuario_logado) != str(id)) or is_admin:
+        dados = {
+            "msg":"Acesso negado. Você não tem permissão para ver atividades de outro usuário."
+        }
+        return jsonify(dados), 403
+    try:
+        stmt = select(Atividade).where(Atividade.pessoa_id==id)
+        notas_result = db_session.execute(stmt).scalars().all() # .scalars().all() para obter uma lista de objetos
+        notas_list = [{"id": nota.id, "nome": nota.nome, "criado_em":nota.criado_em} for nota in notas_result]
+        print("notas_usuario:",notas_list)
+        return jsonify(notas_list)
+    except Exception as e:
+        print(str(e))
+        dado = {
+            "msg": "Credenciais invalidas"
+        }
+        return jsonify({"msg": f"Erro ao listar nota"}), 500
+@app.route('/recursos', methods=['POST'])
+def post_recurso():
+    if request.method == 'POST':
+        nome_ = request.form.get('form_nome')
+        tipo_ = request.form.get('form_tipo')
+        descricao_ = request.form.get('form_desc')
+        if nome_== '':
+            flash("Preencha o nome", "error")
+            return render_template('criar_recurso.html')
+        if tipo_ == '':
+            flash("Preencha o sobrenome", "error")
+            return render_template('criar_recurso.html')
+        if descricao_ == '':
+            flash("Preencha o cpf", "error")
+            return render_template('criar_recurso.html')
+        dados_pessoa = Recurso(nome= nome_, tipo=tipo_, descricao= descricao_)
+        db_session = local_session()
+        try:
+            db_session.add(dados_pessoa)
+            db_session.commit()
+            flash('Pessoa criada com sucesso!', 'success')
+            return redirect(url_for('get_recursos'))
+        except SQLAlchemyError as e:
+            print(f'Erro ao cadastrar pessoa: {e}')
+            flash(f'Erro no banco ao cadastrar pessoa: {e}', 'error')
+            db_session.rollback()
+            return render_template('criar_recurso.html')
+        except Exception as ex:
+            print(f'Erro a ser analisado: {ex}')
+            flash(f'Erro ao cadastrar pessoa: {ex}', 'error')
+            db_session.rollback()
+            return render_template('criar_recurso.html')
+        finally:
+            db_session.close()
+    return render_template('criar_recurso.html')
 
 if __name__ == '__main__':
     app.run(debug=True, port=5003, host="0.0.0.0") # Rodar em uma porta diferente da API principal
