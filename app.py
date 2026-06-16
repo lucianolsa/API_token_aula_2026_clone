@@ -134,6 +134,8 @@ def cadastro():
         return jsonify({"msg": f"Erro ao registrar usuário: {str(e)}"}), 500
 
 @app.route('/usuarios', methods=['GET'])
+@jwt_required()
+@admin_required
 def listar_usuarios():
     print("def_user_get")
     try:
@@ -145,7 +147,7 @@ def listar_usuarios():
             user.serialize() for user in users_result]
         return jsonify(users_result)
     except Exception as e:
-        print(str(e))
+        print("listaUserErro:",str(e))
         dado = {
             "msg": "Credenciais invalidas"
         }
@@ -170,7 +172,7 @@ def criar_nota_exemplo():
         db_session.add(nova_nota)
         db_session.commit()
         nota_id = nova_nota.id
-        return jsonify({"msg": "Nota criada", "nota_id": nota_id}), 201
+        return jsonify({"msg": "Atividade criada", "id": nota_id}), 201
     except Exception as e:
         db_session.rollback()
         print(str(e))
@@ -182,6 +184,8 @@ def listar_notas_exemplo():
     print("def_get_nota")
     claims = get_jwt()
     print("claims:", claims)
+    token_identifica = get_jwt_identity()
+    print("token_identifica:", token_identifica)
     is_admin = claims.get('papel') == 'admin'
     print( "is_admin:", is_admin)
     if not is_admin:
@@ -190,9 +194,24 @@ def listar_notas_exemplo():
         }
         return jsonify(dados), 403
     try:
-        stmt = select(Atividade)
-        notas_result = db_session.execute(stmt).scalars().all() # .scalars().all() para obter uma lista de objetos
-        notas_list = [{"id": nota.id, "nome": nota.nome, "criado_em":nota.criado_em} for nota in notas_result]
+        stmt = select(Atividade, Usuario).join(Usuario,Atividade.pessoa_id==Usuario.id)
+        notas_result = db_session.execute(stmt).all()#.scalars().all() # .scalars().all() para obter uma lista de objetos
+
+        notas_list = []
+        for atividade, usuario in notas_result:
+            notas_list.append(
+                {
+                    "id": atividade.id,
+                    "nome": atividade.nome,
+                    "criado_em": atividade.criado_em.strftime("%d/%m/%Y %H:%M:%S"),
+                    "proprietario_": atividade.pessoa_id,
+                    "usuario": usuario.nome
+                }
+            )
+
+            print("Atividade:",atividade.nome,"Usuario:",usuario.nome)
+        print("kkk",notas_list)
+        # notas_list = [{"id": nota.id, "nome": nota.nome, "criado_em":nota.criado_em} for nota in notas_result]
         return jsonify(notas_list),200
     except Exception as e:
         print(str(e))
@@ -200,7 +219,6 @@ def listar_notas_exemplo():
             "msg": "Credenciais invalidas"
         }
         return jsonify({"msg": f"Erro ao criar nota"}), 500
-
 
 @app.route('/usuario/<id>/atividades', methods=['GET'])
 @jwt_required()
@@ -211,7 +229,7 @@ def listar_notas_usuario(id):
     usuario_logado = claims.get('id')
     is_admin = claims.get('papel') == 'admin'
     print("usuario_logado:",usuario_logado,"is_admin:",is_admin)
-    if (str(usuario_logado) != str(id)) or is_admin:
+    if (str(usuario_logado) != str(id)) :
         dados = {
             "msg":"Acesso negado. Você não tem permissão para ver atividades de outro usuário."
         }
@@ -219,7 +237,7 @@ def listar_notas_usuario(id):
     try:
         stmt = select(Atividade).where(Atividade.pessoa_id==id)
         notas_result = db_session.execute(stmt).scalars().all() # .scalars().all() para obter uma lista de objetos
-        notas_list = [{"id": nota.id, "nome": nota.nome, "criado_em":nota.criado_em} for nota in notas_result]
+        notas_list = [{"id": nota.id, "nome": nota.nome, "criado_em":nota.criado_em.strftime("%d/%m/%Y %H:%M:%S")} for nota in notas_result]
         print("notas_usuario:",notas_list)
         return jsonify(notas_list)
     except Exception as e:
@@ -228,6 +246,7 @@ def listar_notas_usuario(id):
             "msg": "Credenciais invalidas"
         }
         return jsonify({"msg": f"Erro ao listar nota"}), 500
+
 @app.route('/recursos', methods=['POST'])
 def post_recurso():
     if request.method == 'POST':

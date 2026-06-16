@@ -37,7 +37,7 @@ class Usuario(Base):
             "nome":self.nome,
             "email":self.email,
             "papel":self.papel,
-            "criado_em":self.criado_em
+            "criado_em":self.criado_em.strftime("%d/%m/%Y %H:%M:%S")
         }
         return dados
 
