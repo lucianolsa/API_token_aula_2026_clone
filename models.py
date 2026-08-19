@@ -1,27 +1,36 @@
+import os
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, func, ForeignKey, Text
 from sqlalchemy.orm import sessionmaker, declarative_base, scoped_session
 from werkzeug.security import generate_password_hash, check_password_hash
+from dotenv import load_dotenv
 
-# Base de dados
-#engine = create_engine('sqlite:///database.db',pool_size=10, max_overflow=20)
+load_dotenv()
+"""
+    ##Base de dados link local(model)
+    engine = create_engine('sqlite:///database.db',pool_size=10, max_overflow=20)
+
+"""
+
 
 # Banco MySQL
-engine = create_engine('mysql+pymysql://root:senaisp@localhost:3306/base_api')
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL,pool_size=10,max_overflow=20)
+Base = declarative_base()
 
 db_session = scoped_session(sessionmaker(bind=engine))
 
 
-Base = declarative_base()
-Base.query = db_session.query_property()
+#Base = declarative_base()
+#Base.query = db_session.query_property()
 
 
 class Usuario(Base):
     __tablename__ = 'usuarios'
     id = Column(Integer, primary_key=True)
-    nome = Column(String, nullable=False)
-    email = Column(String, nullable=False, unique=True)
-    senha_hash = Column(String, nullable=False)
-    papel = Column(String, default='usuario')
+    nome = Column(String(100), nullable=False)
+    email = Column(String(100), nullable=False, unique=True)
+    senha_hash = Column(String(255), nullable=False)
+    papel = Column(String(20), default='usuario')
     criado_em = Column(DateTime, nullable=False, server_default=func.now())
 
 
@@ -44,7 +53,7 @@ class Usuario(Base):
 class Atividade(Base):
     __tablename__ = 'atividades'
     id = Column(Integer, primary_key=True)
-    nome = Column(String, nullable=False)
+    nome = Column(String(255), nullable=False)
     criado_em = Column(DateTime, nullable=False, server_default=func.now())
     pessoa_id = Column(Integer, ForeignKey('usuarios.id'))
 
@@ -69,4 +78,12 @@ class AtividadeRecurso(Base):
     def __repr__(self):
         return f'<AtividadeRecurso id={self.id}, atividade_id={self.atividade_id}, recurso_id={self.recurso_id}>'
 
-Base.metadata.create_all(engine)  # Cria as tabelas
+# Base.metadata.create_all(engine)  # Cria as tabelas
+# Criar tabelas automaticamente
+def create_tables():
+    Base.metadata.create_all(engine)
+
+
+if __name__ == "__main__":
+    create_tables()
+    print("Tabelas criadas no banco portal.sqlite3!")
