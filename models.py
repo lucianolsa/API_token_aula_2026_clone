@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 """
-    ##Base de dados link local(model)
-    engine = create_engine('sqlite:///database.db',pool_size=10, max_overflow=20)
+##Base de dados link local(model) SQLITE
+engine = create_engine('sqlite:///database.db',pool_size=10, max_overflow=20)
 
 """
 

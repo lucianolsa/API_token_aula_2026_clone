@@ -1,6 +1,4 @@
 import os
-import logging
-from logging.handlers import RotatingFileHandler
 from datetime import timedelta, datetime
 from flask import Flask, jsonify,request
 from sqlalchemy import select
@@ -17,21 +15,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 3jUU
-
-# Configurar logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-
-logger = logging.getLogger(__name__)
-
-# Adicionar handler para arquivo
-file_handler = RotatingFileHandler('app.log', maxBytes=10485760, backupCount=10)
-file_handler.setLevel(getattr(logging, os.getenv("FLASK_LOG_LEVEL", "DEBUG")))
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
 
 app = Flask(__name__)
 # definir a senha, em produção colocar em local seguro
@@ -56,8 +39,7 @@ def admin_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         current_user = get_jwt_identity()
-        print(f"User:{current_user}")
-        logger.info(f"Admin check for user: {current_user}")
+        print(f"current_user:{current_user}")
 
         try:
             sql = select(Usuario).where(Usuario.email == current_user)
@@ -79,8 +61,7 @@ def admin_required(fn):
 
 @app.route('/', methods=['GET'])
 def principal():
-    print("def_identificacaoxx")
-    logger.debug(f"def_identificacao {str(datetime.now())}")
+    print(f"def_identificacaoxx {str(datetime.now())}")
     dados = {
         "msg": "COD: 3jUU",
         "atualizado_em":str(datetime.now())
@@ -91,7 +72,6 @@ def principal():
 def login():
     try:
         print("kdr")
-        logger.debug("kdr, função de login")
         # Tenta ler o JSON sem quebrar o servidor se vier lixo
         dados_entrada = request.get_json(silent=True)
         if not dados_entrada:
@@ -102,16 +82,13 @@ def login():
 
         # email = dados_entrada.get('email')
         senha = dados_entrada.get('senha')
-        print("email:",email,"senha",senha)
-        logger.debug(f'Login email:{email}, senha: {senha}')
+        print("Login email:",email,"senha",senha)
 
         sql = select(Usuario).where(Usuario.email == email)
         usuario_existente = db_session.execute(sql).scalar()
         print(f'Usuario existente: {usuario_existente}')
-        logger.debug(f'Usuario existente: {usuario_existente}')
         if not usuario_existente:
-            print("qtp")
-            logger.debug("'qtd' User not found")
+            print("'qtd' User not found")
             dados = {
                 "msg": "Email não cadastrado"
             }
@@ -147,7 +124,6 @@ def login():
                 "access_token": access_token
             }
             print("UTY:",dados)
-            logger.debug(f"UTY:{dados}")
             return jsonify(dados),200
         dados = {
             "msg":"Credenciais invalidas"
