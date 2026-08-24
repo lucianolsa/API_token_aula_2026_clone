@@ -42,9 +42,10 @@ def admin_required(fn):
         print(f"current_user:{current_user}")
 
         try:
-            sql = select(Usuario).where(Usuario.email == current_user)
+            sql = select(Usuario).where(Usuario.id == current_user)
             usuario_existente =db_session.execute(sql).scalar()
             print(f'Usuario existente: {usuario_existente}')
+            #print(f'teste: {usuario_existente.papel == "admin"}')
             if usuario_existente and usuario_existente.papel == "admin":
                 return fn(*args, **kwargs)
             dado = {
@@ -71,7 +72,7 @@ def principal():
 @app.route('/login', methods=['POST'])
 def login():
     try:
-        print("kdr")
+        print("log:/login")
         # Tenta ler o JSON sem quebrar o servidor se vier lixo
         dados_entrada = request.get_json(silent=True)
         if not dados_entrada:
@@ -82,7 +83,7 @@ def login():
 
         # email = dados_entrada.get('email')
         senha = dados_entrada.get('senha')
-        print("Login email:",email,"senha",senha)
+        print("log: Login email:",email,"senha",senha)
 
         sql = select(Usuario).where(Usuario.email == email)
         usuario_existente = db_session.execute(sql).scalar()
