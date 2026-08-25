@@ -268,32 +268,36 @@ def listar_atividades_exemplo():
         }
         return jsonify(dados), 500
 
-@app.route('/usuario/<id>/atividades', methods=['GET'])
+@app.route('/usuario/<int:id>/atividades', methods=['GET'])
 @jwt_required()
 def listar_atividades_usuario(id):
+    # --- 1. IDENTIFICAÇÃO E AUTORIZAÇÃO ---
     claims = get_jwt()
     usuario_logado = claims.get('id')
     is_admin = claims.get('papel') == 'admin'
+
+    # logs
     print('Admim?',is_admin,' ',claims.get('papel') )
     print("***",(str(usuario_logado) != str(id)) and not is_admin)
 
+    # Se o ID do token for diferente do ID da URL E não for admin, bloqueia.
     if (str(usuario_logado) != str(id)) and not is_admin:
         dados = {
             "msg":"Acesso negado. Você não tem permissão para ver atividades de outro usuário."
         }
         return jsonify(dados), 403
     try:
+        # --- 2. BUSCA NO BANCO DE DADOS ---
         stmt = select(Atividade).where(Atividade.pessoa_id==id)
-        atividades_result = db_session.execute(stmt).scalars().all() # .scalars().all() para obter uma lista de objetos
-        if not atividades_result:
-            dados = {
-                "msg": f"Não foram encontradas atividades para este usuário."
-            }
-            return jsonify(dados), 404
-        atividades_list = []
+        atividades_result = db_session.execute(stmt).scalars().all()
+        # .scalars().all() para obter uma lista de objetos
+
+        atividades_list = [] # Cria uma lista vazia
+
         print("atv:",atividades_result)
+
         for atividade in atividades_result:
-            print("atv:",atividade)
+            print("intens_atv:",atividade)
             atividades_list.append({"id": atividade.id, "nome": atividade.nome, "criado_em":atividade.criado_em.strftime("%d/%m/%Y %H:%M:%S")})
         #atividades_list = [{"id": nota.id, "nome": nota.nome, "criado_em":nota.criado_em.strftime("%d/%m/%Y %H:%M:%S")} for nota in atividades_result]
         return jsonify(atividades_list)
