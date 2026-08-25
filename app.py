@@ -289,20 +289,26 @@ def listar_atividades_usuario(id):
     try:
         # --- 2. BUSCA NO BANCO DE DADOS ---
         stmt = select(Atividade).where(Atividade.pessoa_id==id)
-        atividades_result = db_session.execute(stmt).scalars().all()
-        # .scalars().all() para obter uma lista de objetos
+        atividades_result = db_session.execute(stmt).scalars().all()  # .scalars().all() para obter uma lista de objetos
 
+        # --- 3. MONTAGEM DA RESPOSTA
         atividades_list = [] # Cria uma lista vazia
-
-        print("atv:",atividades_result)
+        print("log: atv:",atividades_result)
 
         for atividade in atividades_result:
             print("intens_atv:",atividade)
-            atividades_list.append({"id": atividade.id, "nome": atividade.nome, "criado_em":atividade.criado_em.strftime("%d/%m/%Y %H:%M:%S")})
-        #atividades_list = [{"id": nota.id, "nome": nota.nome, "criado_em":nota.criado_em.strftime("%d/%m/%Y %H:%M:%S")} for nota in atividades_result]
-        return jsonify(atividades_list)
+            dicionario_atividade = {
+                "id": atividade.id,
+                "nome": atividade.nome,
+                "criado_em": atividade.criado_em.strftime("%d/%m/%Y %H:%M:%S")
+            }
+            atividades_list.append(dicionario_atividade)
+            #atividades_list = [{"id": nota.id, "nome": nota.nome, "criado_em":nota.criado_em.strftime("%d/%m/%Y %H:%M:%S")} for nota in atividades_result]
+
+        return jsonify(atividades_list),200
+
     except Exception as e:
-        print("erro:",str(e))
+        print("erro:listar_atividades_usuario:",str(e))
         dados = {
             "msg": "Erro ao listar atividades"
         }
