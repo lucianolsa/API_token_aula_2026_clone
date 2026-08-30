@@ -1,6 +1,6 @@
 import os
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, func, ForeignKey, Text
-from sqlalchemy.orm import sessionmaker, declarative_base, scoped_session
+from sqlalchemy.orm import sessionmaker, declarative_base, scoped_session, relationship
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
@@ -58,6 +58,10 @@ class Atividade(Base):
     criado_em = Column(DateTime, nullable=False, server_default=func.now())
     pessoa_id = Column(Integer, ForeignKey('usuarios.id'))
 
+    # secondary='atividades_recursos' diz pro SQLAlchemy qual tabela ponte usar.
+    recursos = relationship("Recurso", secondary="atividades_recursos", back_populates="atividades")
+
+
 class Recurso(Base):
     __tablename__ = 'recursos'
     id = Column(Integer, primary_key=True)
@@ -65,6 +69,8 @@ class Recurso(Base):
     tipo = Column(String(50), nullable=False)
     descricao = Column(Text, nullable=False)
     criado_em = Column(DateTime, nullable=False, server_default=func.now())
+
+    atividades = relationship("Atividade", secondary="atividades_recursos", back_populates="recursos")
 
     def __repr__(self):
         return f'<Recurso={self.nome}, tipo={self.tipo}, descricao={self.descricao}>'

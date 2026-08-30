@@ -2,6 +2,7 @@ import os
 from datetime import timedelta, datetime
 from flask import Flask, jsonify,request
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
 from models import Usuario, db_session, Atividade, Recurso
 # gerar token
@@ -200,6 +201,44 @@ def listar_usuarios():
         }
         return jsonify(dados), 500
 
+@app.route('/usuarios/<int:id>', methods=['GET'])
+@jwt_required()
+def obter_detalhes_usuario(id):
+    # --- 1. IDENTIFICAÇÃO E AUTORIZAÇÃO ---
+    claims = get_jwt()
+    usuario_logado = claims.get('id')
+    is_admin = claims.get('papel') == 'admin'
+
+    # PROTEÇÃO (Somente o dono do perfil ou um Admin podem ver)
+    if str(usuario_logado) != str(id) and not is_admin:
+        dados = {"msg": "Acesso negado. Você só pode visualizar o seu próprio perfil."}
+        return jsonify(dados), 403
+
+    try:
+        # --- 2. BUSCA NO BANCO DE DADOS  ---
+        usuario = db_session.get(Usuario, id)
+
+        # --- 3. VALIDAÇÃO DE EXISTÊNCIA (404) ---
+        if usuario is None:
+            return jsonify({"msg": "Usuário não encontrado."}), 404
+
+        # --- 4. MONTAGEM DA RESPOSTA SEGURA ---
+        # ATENÇÃO: Repare que o campo 'senha_hash' NÃO está aqui!
+        detalhes_usuario = {
+            "id": usuario.id,
+            "nome": usuario.nome,
+            "email": usuario.email,
+            "papel": usuario.papel,
+            "criado_em": usuario.criado_em.strftime("%d/%m/%Y %H:%M:%S") if usuario.criado_em else None
+        }
+        return jsonify(detalhes_usuario), 200
+
+    except Exception as e:
+        print("Erro ao obter detalhes do usuário:", str(e))
+        dados = {"msg": "Erro interno ao buscar detalhes do usuário."}
+        return jsonify(dados), 500
+
+
 @app.route('/atividades', methods=['POST'])
 @jwt_required()
 def criar_atividade_exemplo():
@@ -236,16 +275,16 @@ def criar_atividade_exemplo():
 def listar_atividades_exemplo():
     claims = get_jwt()
     token_identifica = get_jwt_identity()
+    print("log:token_identifica:",token_identifica)
     is_admin = claims.get('papel') == 'admin'
     if not is_admin:
-        dados = {
-            "msg": "Acesso negado. Você não tem permissão para ver atividades de outro usuário."
-        }
-        return jsonify(dados), 403
-    try:
-        stmt = select(Atividade, Usuario).join(Usuario,Atividade.pessoa_id==Usuario.id)
-        atividades_result = db_session.execute(stmt).all()#.scalars().all() # .scalars().all() para obter uma lista de objetos
+        atividades_busca = select(Atividade, Usuario).join(Usuario, Atividade.pessoa_id == Usuario.id).where(Atividade.pessoa_id == token_identifica)
+        atividades_result = db_session.execute(atividades_busca).all() # .scalars().all() para obter uma lista de objetos
+    else:
+        stmt = select(Atividade, Usuario).join(Usuario, Atividade.pessoa_id == Usuario.id)
+        atividades_result = db_session.execute(stmt).all()  # .scalars().all() # .scalars().all() para obter uma lista de objetos
 
+    try:
         atividades_list = []
         for atividade, usuario in atividades_result:
             atividades_list.append(
@@ -287,13 +326,23 @@ def listar_atividades_usuario(id):
         }
         return jsonify(dados), 403
     try:
-        # --- 2. BUSCA NO BANCO DE DADOS ---
+        # --- 2.  VALIDAÇÃO DO PAI (O USUÁRIO EXISTE?) ---
+        # No SQLAlchemy 2.0, usamos db_session.get(Classe, id) para buscar pela Chave Primária
+        usuario = db_session.get(Usuario, id)
+        if not usuario:
+            dados = {
+                "msg": "Usuário não encontrado"
+            }
+            return jsonify(dados), 404
+
+        # --- 3. BUSCA NO BANCO DE DADOS ---
         stmt = select(Atividade).where(Atividade.pessoa_id==id)
         atividades_result = db_session.execute(stmt).scalars().all()  # .scalars().all() para obter uma lista de objetos
 
-        # --- 3. MONTAGEM DA RESPOSTA
+
+        # --- 4. MONTAGEM DA RESPOSTA
         atividades_list = [] # Cria uma lista vazia
-        print("log: atv:",atividades_result)
+        print("log: atv:",atividades_result),0
 
         for atividade in atividades_result:
             print("intens_atv:",atividade)
@@ -351,6 +400,131 @@ def post_recurso():
         db_session.rollback()
         return jsonify(dados), 500
 
+@app.route('/atividades/<int:atividade_id>/recursos', methods=['POST'])
+@jwt_required()
+def add_recursos_em_atividade(atividade_id):
+    # --- 1. IDENTIFICAÇÃO DO USUÁRIO LOGADO ---
+    claims = get_jwt()
+    usuario_logado = claims.get('id')
+    is_admin = claims.get('papel') == 'admin'
+
+    # --- 2. VALIDAÇÃO DE ENTRADA (O que o cliente mandou?) ---
+    data = request.get_json(silent=True)
+
+    if not data or not data.get('recurso_id'):
+        dados = {"msg": "O ID do recurso (recurso_id) é obrigatório."}
+        return jsonify(dados), 400
+
+    recurso_id = data.get('recurso_id')
+
+    try:
+        # --- 3.VALIDAÇÃO DO PAI (A Atividade existe?) ---
+        atividade = db_session.get(Atividade, atividade_id)
+        print(f"atividade:{atividade.nome}")
+
+        # --- 4.PROTEÇÃO (A Atividade é desse usuário?) ---
+        # Só deixamos adicionar o recurso se o usuário for o dono da atividade ou um Admin
+        if str(atividade.pessoa_id) != str(usuario_logado) and not is_admin:
+            dados = {"msg": "Acesso negado. Você não tem permissão para adicionar recursos a esta atividade."}
+            return jsonify(dados), 403
+
+        # --- 5. VALIDAÇÃO DO FILHO (O Recurso existe?) ---
+        recurso = db_session.get(Recurso, recurso_id)
+        print(f"recurso:{recurso.nome}")
+
+        if recurso is None:
+            dados = {"msg": "Recurso não encontrado."}
+            return jsonify(dados), 404
+
+        # --- 6. VALIDAÇÃO DE NEGÓCIO (Evitar Duplicidade) ---
+        # Verifica se o recurso já está na lista de recursos desta atividade
+
+        if recurso in atividade.recursos:
+            print(f"Recurso {recurso.nome} já está associado à atividade {atividade.nome}.")
+            dados = {"msg": "Recurso já adicionado a esta atividade."}
+            return jsonify(dados), 409 # 409 = Conflict
+
+        # --- 7. ORM (Salvando no banco) ---
+        # O SQLAlchemy faz o INSERT na tabela associativa "atividade_recurso"
+        atividade.recursos.append(recurso)
+        db_session.commit()
+        dados = {
+            "msg": "Recurso adicionado à atividade com sucesso!"
+        }
+        return jsonify(dados), 201
+
+    except Exception as e:
+        db_session.rollback()  # Desfaz qualquer alteração pela metade
+        print("Erro ao buscar atividade:", str(e))
+        dados = {"msg": "Erro interno ao adicionar o recurso."}
+        return jsonify(dados), 500
+
+@app.route('/atividade/<int:atividade_id>', methods=['GET'])
+@jwt_required()
+def get_atividade(atividade_id):
+
+    # --- 1. IDENTIFICAÇÃO E AUTORIZAÇÃO ---
+    claims = get_jwt()
+    usuario_logado = claims.get('id')
+    is_admin = claims.get('papel') == 'admin'
+
+    try:
+        # --- 2. BUSCA NO BANCO (JOIN com Usuário) ---
+        # .options(selectinload...) traz todos os recursos anexados sem travar o banco
+
+        busca_atividade = (
+            select(Atividade, Usuario)
+            .join(Usuario, Atividade.pessoa_id == Usuario.id)
+            .where(Atividade.id == atividade_id)
+            .options(selectinload(Atividade.recursos))
+        )
+        resultado = db_session.execute(busca_atividade).first()
+
+        # --- 3. VALIDAÇÃO DE EXISTÊNCIA (404 Not Found) ---
+        # Se a atividade ID 9999 não existir no banco:
+        if resultado is None:
+            dados = {"msg": "Atividade não encontrada no sistema."}
+            return jsonify(dados), 404
+
+        atividade, usuario = resultado
+
+
+        # ---4. Proteção: só o dono da atividade ou um Admin pode ver os detalhes
+        if str(atividade.pessoa_id) != str(usuario_logado) and not is_admin:
+            dados = {"msg": "Acesso negado. Você não tem permissão para ver esta atividade."}
+            return jsonify(dados), 403
+
+        # --- 5. MONTAGEM DOS RECURSOS
+        recursos_list = []
+
+        for recurso in atividade.recursos:
+            recursos_list.append(
+                {
+                    "id": recurso.id,
+                    "nome": recurso.nome,
+                    "tipo": recurso.tipo,
+                    "descricao": recurso.descricao}
+            )
+
+        dados = {
+            "id": atividade.id,
+            "nome": atividade.nome,
+            "criado_em": atividade.criado_em.strftime("%d/%m/%Y %H:%M:%S"),
+            "proprietario_": {
+
+                "id": usuario.id,
+                "nome": usuario.nome,
+                "email": usuario.email
+            },
+            "recursos": recursos_list,
+            "total_recursos": len(recursos_list)
+        }
+        return jsonify(dados), 200
+
+    except Exception as e:
+        print("Erro ao buscar atividade:", str(e))
+        dados = {"msg": "Erro interno ao buscar a atividade."}
+        return jsonify(dados), 500
 
 
 if __name__ == '__main__':
