@@ -312,7 +312,6 @@ def obter_detalhes_usuario(id):
         dados = {"msg": "Erro interno ao buscar detalhes do usuário."}
         return jsonify(dados), 500
 
-
 @app.route('/atividades', methods=['POST'])
 @jwt_required()
 def criar_atividade_exemplo():
@@ -434,6 +433,37 @@ def listar_atividades_usuario(id):
         print("erro:listar_atividades_usuario:",str(e))
         dados = {
             "msg": "Erro ao listar atividades"
+        }
+        return jsonify(dados), 500
+
+@app.route('/recursos', methods=['GET'])
+@jwt_required()
+def listar_recursos():
+    # --- 1. IDENTIFICAÇÃO E AUTORIZAÇÃO ---
+    claims = get_jwt()
+    usuario_logado = claims.get('id')
+
+    try:
+        busca_recursos = select(Recurso)
+        recursos_result = db_session.execute(busca_recursos).scalars().all()  #
+
+        recursos_lista = []
+        for recurso in recursos_result:
+            recursos_lista.append({
+                "id": recurso.id,
+                "nome": recurso.nome,
+                "tipo": recurso.tipo,
+                "descricao": recurso.descricao
+            })
+        dados ={
+            "recursos": recursos_lista,
+            "total_recurso": len(recursos_lista)
+        }
+        return jsonify(dados),200
+    except Exception as e:
+        print(str(e))
+        dados = {
+            "msg": "Erro ao listar recursos"
         }
         return jsonify(dados), 500
 
@@ -599,7 +629,6 @@ def get_atividade(atividade_id):
         print("Erro ao buscar atividade:", str(e))
         dados = {"msg": "Erro interno ao buscar a atividade."}
         return jsonify(dados), 500
-
 
 if __name__ == '__main__':
     app.run(debug=True, port=5003, host="0.0.0.0") # Rodar em uma porta diferente da API principal
