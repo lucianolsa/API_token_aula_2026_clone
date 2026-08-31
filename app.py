@@ -201,6 +201,80 @@ def listar_usuarios():
         }
         return jsonify(dados), 500
 
+@app.route('/usuarios/<int:id>', methods=['PUT'])
+@jwt_required()
+def atualizar_usuario(id):
+    # --- 1. IDENTIFICAÇÃO E AUTORIZAÇÃO ---
+    claims = get_jwt()
+    usuario_logado = claims.get('id')
+    is_admin = claims.get('papel') == 'admin'
+
+    if str(usuario_logado) != str(id) and not is_admin:
+        dados = {"msg": "Acesso negado. Você só pode atualizar o seu próprio perfil."}
+        return jsonify(dados), 403
+
+    # --- 2. RECEBENDO OS DADOS (Com silent=True) ---
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"msg": "JSON inválido"}), 400
+
+    try:
+        # --- 3. BUSCA DO USUÁRIO NO BANCO ---
+        usuario = db_session.get(Usuario, id)
+
+        if usuario is None:
+            return jsonify({"msg": "Usuário não encontrado."}), 404
+
+        # --- 4. ATUALIZAÇÃO DOS CAMPOS ---
+
+        # Só atualizamos o nome se ele foi enviado no JSON
+        if 'nome' in data:
+            nome_novo = str(data.get('nome')).strip()
+            if nome_novo:
+                usuario.nome = nome_novo
+
+        # Troca de Senha
+        if 'senha' in data:
+            senha_nova = str(data.get('senha')).strip()
+            if len(senha_nova) >= 4:
+                usuario.set_senha_hash(senha_nova)
+            else:
+                return jsonify({"msg": "A senha deve ter pelo menos 8 caracteres."}), 400
+
+        # A REGRA DO E-MAIL (Evitar duplicidade)
+        if 'email' in data:
+            email_novo = str(data.get('email')).strip()
+
+            # Só faz a checagem no banco se ele REALMENTE estiver tentando mudar o e-mail
+            if email_novo != usuario.email:
+                # Verifica se já existe ALGUÉM com esse e-mail
+                email_existente = db_session.execute(
+                    select(Usuario).where(Usuario.email == email_novo)
+                ).scalar_one_or_none()
+                if email_existente:
+                    return jsonify({"msg": "O email já está em uso."}), 409 # conflito
+
+                usuario.email = email_novo
+
+        if 'papel' in data:
+        # SÓ DEIXAMOS ALTERAR O PAPEL SE QUEM ESTÁ LOGADO FOR UM ADMIN!
+            if is_admin:
+                usuario.papel = data.get('papel')
+            else:
+                return jsonify({"msg": "Acesso negado. Apenas administradores podem alterar o papel do usuário."}), 403
+
+        # --- 5. SALVANDO NO BANCO DE DADOS ---
+        # Como o objeto 'usuario' está amarrado ao banco, não precisamos de db_session.add(),
+        # apenas o commit() já entende que os atributos foram alterados na memória!
+        db_session.commit()
+        dados = {"msg": "Usuário atualizado com sucesso."}
+        return jsonify(dados), 200
+    except Exception as e:
+        db_session.rollback()
+        print("Erro ao atualizar usuário:", str(e))
+        dados = {"msg": "Erro interno ao atualizar usuário."}
+        return jsonify(dados), 500
+
 @app.route('/usuarios/<int:id>', methods=['GET'])
 @jwt_required()
 def obter_detalhes_usuario(id):
