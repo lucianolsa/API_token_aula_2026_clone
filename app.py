@@ -102,8 +102,6 @@ def login():
         if usuario_existente and usuario_existente.check_password_hash(senha):
             print("datetime.datetime()")
             # criação e configuração token
-
-
             '''
             ###create_access_token
             # Prefira SEMPRE colocar o `ID` do banco de dados, não o e-mail. E-mails podem ser alterados pelo usuário no futuro
@@ -115,7 +113,6 @@ def login():
 
                 identity=str(usuario_existente.id),
                 additional_claims={
-                    "id":usuario_existente.id,
                     "papel":usuario_existente.papel,
                     "nome":usuario_existente.nome,
                     "criado_em":str(datetime.now())
@@ -385,7 +382,9 @@ def listar_atividades_exemplo():
 def listar_atividades_usuario(id):
     # --- 1. IDENTIFICAÇÃO E AUTORIZAÇÃO ---
     claims = get_jwt()
-    usuario_logado = claims.get('id')
+    print("log:grts",claims)
+    usuario_logado = claims.get('sub')
+    print("log:usuario_logado:",usuario_logado)
     is_admin = claims.get('papel') == 'admin'
 
     # logs
@@ -453,7 +452,8 @@ def listar_recursos():
                 "id": recurso.id,
                 "nome": recurso.nome,
                 "tipo": recurso.tipo,
-                "descricao": recurso.descricao
+                "descricao": recurso.descricao,
+                "criado_em": recurso.criado_em.strftime("%d/%m/%Y %H:%M:%S")
             })
         dados ={
             "recursos": recursos_lista,

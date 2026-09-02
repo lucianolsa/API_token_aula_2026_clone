@@ -8,14 +8,14 @@ load_dotenv()
 """
 ##Base de dados link local(model) SQLITE
 """
-engine = create_engine('sqlite:///database.db',pool_size=10, max_overflow=20)
+#engine = create_engine('sqlite:///database.db',pool_size=10, max_overflow=20)
 
 
 
 
 # Banco MySQL
 DATABASE_URL = os.getenv("DATABASE_URL")
-#engine = create_engine(DATABASE_URL,pool_size=10,max_overflow=20)
+engine = create_engine(DATABASE_URL,pool_size=10,max_overflow=20)
 Base = declarative_base()
 
 db_session = scoped_session(sessionmaker(bind=engine))
