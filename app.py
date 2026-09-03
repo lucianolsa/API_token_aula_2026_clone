@@ -203,7 +203,7 @@ def listar_usuarios():
 def atualizar_usuario(id):
     # --- 1. IDENTIFICAÇÃO E AUTORIZAÇÃO ---
     claims = get_jwt()
-    usuario_logado = claims.get('id')
+    usuario_logado = claims.get('sub')
     is_admin = claims.get('papel') == 'admin'
 
     if str(usuario_logado) != str(id) and not is_admin:
@@ -277,7 +277,7 @@ def atualizar_usuario(id):
 def obter_detalhes_usuario(id):
     # --- 1. IDENTIFICAÇÃO E AUTORIZAÇÃO ---
     claims = get_jwt()
-    usuario_logado = claims.get('id')
+    usuario_logado = claims.get('sub')
     is_admin = claims.get('papel') == 'admin'
 
     # PROTEÇÃO (Somente o dono do perfil ou um Admin podem ver)
@@ -321,7 +321,7 @@ def criar_atividade_exemplo():
         return jsonify(dados), 400
     try:
         claims = get_jwt()
-        usuario_id = claims.get('id')
+        usuario_id = claims.get('sub')
         # associa a Atividade ao id logado
         nova_atividade = Atividade(nome=nome,pessoa_id=usuario_id)
         db_session.add(nova_atividade)
@@ -440,7 +440,7 @@ def listar_atividades_usuario(id):
 def listar_recursos():
     # --- 1. IDENTIFICAÇÃO E AUTORIZAÇÃO ---
     claims = get_jwt()
-    usuario_logado = claims.get('id')
+    usuario_logado = claims.get('sub')
 
     try:
         busca_recursos = select(Recurso)
@@ -509,7 +509,7 @@ def post_recurso():
 def add_recursos_em_atividade(atividade_id):
     # --- 1. IDENTIFICAÇÃO DO USUÁRIO LOGADO ---
     claims = get_jwt()
-    usuario_logado = claims.get('id')
+    usuario_logado = claims.get('sub')
     is_admin = claims.get('papel') == 'admin'
 
     # --- 2. VALIDAÇÃO DE ENTRADA (O que o cliente mandou?) ---
@@ -569,7 +569,8 @@ def get_atividade(atividade_id):
 
     # --- 1. IDENTIFICAÇÃO E AUTORIZAÇÃO ---
     claims = get_jwt()
-    usuario_logado = claims.get('id')
+    usuario_logado = claims.get('sub')
+    print("log:usuario_logado:",usuario_logado)
     is_admin = claims.get('papel') == 'admin'
 
     try:
